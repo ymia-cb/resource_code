@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识库管理 · 电商智能客服</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --warning: #d97706;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px;
+  }
+  .container { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+
+  /* 上传区 */
+  .dropzone {
+    background: var(--card);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s;
+    margin-bottom: 20px;
+  }
+  .dropzone.dragover { border-color: var(--primary); background: #eff6ff; }
+  .dropzone .icon { font-size: 36px; margin-bottom: 8px; }
+  .dropzone .hint { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
+  .dropzone input[type=file] { display: none; }
+  .upload-category {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 12px; flex-wrap: wrap;
+  }
+  .upload-category label { font-size: 13px; color: var(--text-muted); }
+  .upload-category input[type=text] {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; width: 200px;
+  }
+
+  /* 文档列表 */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+  .doc-list { list-style: none; }
+  .doc-item {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s;
+  }
+  .doc-item:hover { background: #f9fafb; }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-icon { font-size: 24px; flex-shrink: 0; }
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-name { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* 状态徽标 */
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 500; flex-shrink: 0;
+  }
+  .badge-queued { background: #f3f4f6; color: #6b7280; }
+  .badge-parsing { background: #fef3c7; color: #92400e; }
+  .badge-done { background: #dbeafe; color: #1e40af; }
+  .badge-indexed { background: #dcfce7; color: #166534; }
+  .badge-failed { background: #fee2e2; color: #991b1b; }
+
+  /* 按钮 */
+  .btn {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; color: var(--text); font-size: 13px; cursor: pointer;
+    transition: all .12s; white-space: nowrap;
+  }
+  .btn:hover { background: #f3f4f6; }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-danger { color: var(--danger); border-color: #fecaca; }
+  .btn-danger:hover { background: #fef2f2; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* 详情/预览面板 */
+  .detail-panel {
+    margin-top: 20px; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); display: none;
+  }
+  .detail-panel.open { display: block; }
+  .detail-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .detail-title { font-weight: 600; font-size: 15px; }
+  .detail-body { padding: 20px; }
+  .detail-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 13px; color: var(--text-muted); }
+  .preview {
+    background: #f9fafb; border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; max-height: 400px; overflow: auto; font-size: 13px;
+  }
+  .preview pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; }
+  .error-box { background: #fef2f2; color: #991b1b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+
+  .empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
+  .toast {
+    position: fixed; top: 20px; right: 20px; padding: 10px 18px; border-radius: 8px;
+    background: #1f2937; color: #fff; font-size: 13px; opacity: 0; transform: translateY(-10px);
+    transition: all .25s; z-index: 100; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  /* 进度条 */
+  .progress-wrap { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .progress-bar {
+    flex: 1; height: 6px; background: #e5e7eb; border-radius: 999px; overflow: hidden;
+    max-width: 180px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--primary); border-radius: 999px;
+    transition: width .3s ease;
+  }
+  .progress-fill.done { background: var(--success); }
+  .progress-fill.failed { background: var(--danger); }
+  .progress-pct { font-size: 12px; color: var(--text-muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  .progress-wrap-lg { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .progress-wrap-lg .progress-bar { max-width: none; height: 10px; }
+  .progress-wrap-lg .progress-pct { font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📚 知识库管理</h1>
+  <div class="subtitle">上传文档 → MinerU 解析 → 切块向量化 → 入库 Milvus，供 RAG 检索</div>
+
+  <!-- 上传区 -->
+  <div class="dropzone" id="dropzone">
+    <div class="icon">📤</div>
+    <div>点击或拖拽文件到此处上传</div>
+    <div class="hint">支持 .pdf / .png / .jpg / .docx / .xlsx / .pptx / .md / .txt，单文件 ≤ 50MB</div>
+    <div class="upload-category">
+      <label>分类：</label>
+      <input type="text" id="categoryInput" placeholder="如 refund_policy / shipping / coupon">
+    </div>
+    <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.md,.txt,.markdown">
+  </div>
+
+  <!-- 文档列表 -->
+  <div class="card">
+    <div class="card-header">
+      <span>已导入文档</span>
+      <button class="btn" id="refreshBtn" onclick="loadDocs()">刷新</button>
+    </div>
+    <ul class="doc-list" id="docList"></ul>
+    <div class="empty" id="emptyState" style="display:none">暂无文档，上传一个开始吧</div>
+  </div>
+
+  <!-- 详情/预览面板 -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <span class="detail-title" id="detailTitle"></span>
+      <div class="doc-actions">
+        <button class="btn btn-primary" id="confirmBtn" onclick="confirmDoc()">确认入库</button>
+        <button class="btn" onclick="reparseDoc()">重新解析</button>
+        <button class="btn btn-danger" onclick="deleteDoc()">删除</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-meta" id="detailMeta"></div>
+      <div id="detailProgress"></div>
+      <div class="error-box" id="errorBox" style="display:none"></div>
+      <div class="preview"><pre id="preview"></pre></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = ''; // 同源
+let currentDocId = null;
+
+// 状态 → 中文
+const STATUS_TEXT = {
+  uploaded: '已上传', queued: '排队中', parsing: '解析中',
+  done: '待入库', indexed: '已入库', failed: '失败'
+};
+const STATUS_BADGE = {
+  uploaded: 'queued', queued: 'queued', parsing: 'parsing',
+  done: 'done', indexed: 'indexed', failed: 'failed'
+};
+
+function toast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// ---- 上传 ----
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dz.addEventListener('click', () => fileInput.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  uploadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => { uploadFiles(fileInput.files); fileInput.value = ''; });
+
+async function uploadFiles(files) {
+  const category = document.getElementById('categoryInput').value.trim() || null;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    if (category) fd.append('category', category);
+    try {
+      const r = await fetch(API + '/knowledge/import', { method: 'POST', body: fd });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || '上传失败');
+      toast(`已上传 ${f.name}（${STATUS_TEXT[data.status] || data.status}）`, data.status === 'failed');
+      if (data.error) toast(data.error, true);
+    } catch (err) {
+      toast('上传失败: ' + err.message, true);
+    }
+  }
+  loadDocs();
+}
+
+// ---- 列表 ----
+async function loadDocs() {
+  try {
+    const r = await fetch(API + '/knowledge/docs');
+    const docs = await r.json();
+    const list = document.getElementById('docList');
+    const empty = document.getElementById('emptyState');
+    list.innerHTML = '';
+    empty.style.display = docs.length ? 'none' : 'block';
+
+    docs.forEach(d => {
+      const li = document.createElement('li');
+      li.className = 'doc-item';
+      li.innerHTML = `
+        <span class="doc-icon">${iconFor(d.file_type)}</span>
+        <div class="doc-info">
+          <div class="doc-name">${escapeHtml(d.file_name)}</div>
+          <div class="doc-meta">${escapeHtml(d.file_type || '')} · ${d.category || '未分类'} · ${d.chunk_count ?? 0} 块 · ${fmtTime(d.created_at)}</div>
+          ${progressHtml(d.progress, d.status)}
+        </div>
+        <span class="badge badge-${STATUS_BADGE[d.status] || 'queued'}">${STATUS_TEXT[d.status] || d.status}</span>
+        <div class="doc-actions">
+          <button class="btn" onclick="event.stopPropagation(); openDetail(${d.doc_id})">查看</button>
+        </div>`;
+      li.addEventListener('click', () => openDetail(d.doc_id));
+      list.appendChild(li);
+    });
+  } catch (err) {
+    toast('加载列表失败: ' + err.message, true);
+  }
+}
+
+function iconFor(type) {
+  const t = (type || '').toLowerCase();
+  if (t === 'pdf') return '📄';
+  if (['png','jpg','jpeg'].includes(t)) return '🖼️';
+  if (['md','txt','markdown'].includes(t)) return '📝';
+  if (t === 'docx') return '📃';
+  if (t === 'xlsx') return '📊';
+  if (t === 'pptx') return '📽️';
+  return '📁';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  return iso.replace('T', ' ').slice(0, 19);
+}
+
+// 进度条 HTML（status 决定配色）
+function progressHtml(progress, status, large = false) {
+  const p = Math.max(0, Math.min(100, Number(progress) || 0));
+  const fillCls = status === 'indexed' || p === 100 ? 'done' : (status === 'failed' ? 'failed' : '');
+  const wrapCls = large ? 'progress-wrap-lg' : 'progress-wrap';
+  return `<div class="${wrapCls}">
+    <div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${p}%"></div></div>
+    <span class="progress-pct">${p}%</span>
+  </div>`;
+}
+
+// ---- 详情 ----
+async function openDetail(docId) {
+  currentDocId = docId;
+  try {
+    const r = await fetch(API + `/knowledge/docs/${docId}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || '加载失败');
+    document.getElementById('detailPanel').classList.add('open');
+    document.getElementById('detailTitle').textContent = d.file_name;
+    document.getElementById('detailMeta').innerHTML = `
+      <span>状态：<span class="badge badge-${STATUS_BADGE[d.status] || 'queued'}">${STATUS_TEXT[d.status] || d.status}</span></span>
+      <span>分类：${escapeHtml(d.category || '未分类')}</span>
+      <span>类型：${escapeHtml(d.file_type)}</span>
+      <span>切块：${d.chunk_count ?? 0}</span>`;
+    document.getElementById('detailProgress').innerHTML = progressHtml(d.progress, d.status, true);
+    const errBox = document.getElementById('errorBox');
+    if (d.error_msg) { errBox.style.display = 'block'; errBox.textContent = d.error_msg; }
+    else { errBox.style.display = 'none'; }
+    document.getElementById('preview').textContent = d.preview_md || '（尚未解析出内容）';
+    document.getElementById('confirmBtn').disabled = !d.preview_md;
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function confirmDoc() {
+  if (!currentDocId) return;
+  try {
+    const r = await fetch(API + `/knowledge/docs/${currentDocId}/confirm`, { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '入库失败');
+    toast(`入库完成，共 ${data.chunk_count} 块`);
+    openDetail(currentDocId); loadDocs();
+  } catch (err) { toast('入库失败: ' + err.message, true); }
+}
+
+async function reparseDoc() {
+  if (!currentDocId) return;
+  try {
+    const r = await fetch(API + `/knowledge/docs/${currentDocId}/reparse`, { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '操作失败');
+    toast('已重新排队');
+    openDetail(currentDocId); loadDocs();
+  } catch (err) { toast('操作失败: ' + err.message, true); }
+}
+
+async function deleteDoc() {
+  if (!currentDocId) return;
+  if (!confirm('确认删除该文档及其向量？此操作不可恢复。')) return;
+  try {
+    const r = await fetch(API + `/knowledge/docs/${currentDocId}`, { method: 'DELETE' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '删除失败');
+    toast('已删除');
+    document.getElementById('detailPanel').classList.remove('open');
+    currentDocId = null;
+    loadDocs();
+  } catch (err) { toast('删除失败: ' + err.message, true); }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+loadDocs();
+</script>
+</body>
+</html>

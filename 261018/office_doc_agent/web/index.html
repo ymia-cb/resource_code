@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>办公文档 Agent 看板</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e3e6ea;
+    --text: #1f2733;
+    --muted: #7a8494;
+    --accent: #2f6bff;
+    --red: #d64545;
+    --green: #18a058;
+    --amber: #e6a23c;
+    --violet: #7c4dff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 24px; line-height: 1.6;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+  .status-dot.off { background: var(--red); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .panel.full { grid-column: 1 / -1; }
+  .panel h2 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .panel h2 .tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #eef2fb; color: var(--accent); font-weight: 500; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 600; background: var(--accent); color: #fff;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .88; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { background: #eef2fb; color: var(--accent); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field input, .field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  .field textarea { min-height: 60px; resize: vertical; }
+  .layers { display: flex; flex-direction: column; gap: 10px; }
+  .layer { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .layer .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .layer .name { font-weight: 600; font-size: 13px; }
+  .badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; font-weight: 700; }
+  .badge.pass { background: #e6f7ee; color: var(--green); }
+  .badge.fail { background: #fdecec; color: var(--red); }
+  .layer .issue { font-size: 12px; color: var(--red); }
+  .layer .ok { font-size: 12px; color: var(--green); }
+  .channels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .channel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .channel h3 { font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .channel .count { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #f0f1f3; color: var(--muted); }
+  .channel ul { list-style: none; }
+  .channel li { font-size: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  .channel li:last-child { border-bottom: none; }
+  .channel .ev { font-weight: 600; }
+  .ch-auto_block .ev { color: var(--red); }
+  .ch-auto_pass .ev { color: var(--green); }
+  .ch-human .ev { color: var(--amber); }
+  .ch-sample .ev { color: var(--violet); }
+  .channel .empty { color: var(--muted); font-size: 12px; }
+  table.audit { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.audit th, table.audit td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+  table.audit th { color: var(--muted); font-weight: 600; }
+  .mono { font-family: "SF Mono", Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .result-banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-weight: 600; display: none; }
+  .result-banner.ok { background: #e6f7ee; color: var(--green); display: block; }
+  .result-banner.err { background: #fdecec; color: var(--red); display: block; }
+  .download { margin-left: 8px; font-size: 12px; color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span class="status-dot" id="health-dot"></span>办公文档 Agent 看板</h1>
+    <div class="sub">生成 → 中间表示校验（安全主拦截）→ 渲染 → 四层校验</div>
+  </div>
+  <button class="btn ghost" id="btn-audit">刷新审计</button>
+</header>
+
+<div id="result-banner" class="result-banner"></div>
+
+<div class="grid">
+  <!-- 生成操作 -->
+  <div class="panel">
+    <h2>文档生成 <span class="tag">POST /api/generate</span></h2>
+    <div class="field">
+      <label>文档 ID（doc_id）</label>
+      <input id="doc-id" value="contract-001">
+    </div>
+    <div class="field">
+      <label>模板 ID</label>
+      <input id="template-id" value="contract-v1.0">
+    </div>
+    <div class="field">
+      <label>数据覆盖（JSON，可选）</label>
+      <textarea id="data-override" placeholder='{"premium": "¥2,000.00"}'></textarea>
+    </div>
+    <button class="btn" id="btn-generate">生成并校验</button>
+    <div id="gen-status" class="muted" style="margin-top:10px;font-size:12px;"></div>
+  </div>
+
+  <!-- 四层校验结果 -->
+  <div class="panel">
+    <h2>四层校验结果 <span class="tag">L1→L4</span></h2>
+    <div class="layers" id="layers">
+      <div class="muted" style="font-size:12px;">尚未生成，点击左侧「生成并校验」。</div>
+    </div>
+  </div>
+
+  <!-- claim 四通道 -->
+  <div class="panel full">
+    <h2>安全 Claim 队列 <span class="tag">四通道 · 规则×字段</span></h2>
+    <div class="channels" id="channels">
+      <div class="channel ch-auto_block"><h3>自动阻断 <span class="count" id="c-auto_block">0</span></h3><ul id="l-auto_block"></ul></div>
+      <div class="channel ch-auto_pass"><h3>自动放行 <span class="count" id="c-auto_pass">0</span></h3><ul id="l-auto_pass"></ul></div>
+      <div class="channel ch-human"><h3>人工裁决 <span class="count" id="c-human">0</span></h3><ul id="l-human"></ul></div>
+      <div class="channel ch-sample"><h3>抽样复核 <span class="count" id="c-sample">0</span></h3><ul id="l-sample"></ul></div>
+    </div>
+  </div>
+
+  <!-- 审计日志 -->
+  <div class="panel full">
+    <h2>审计日志 <span class="tag">GET /api/audit</span></h2>
+    <div style="overflow-x:auto;">
+      <table class="audit">
+        <thead><tr><th>run_id</th><th>doc_id</th><th>结果</th><th>失败层</th><th>claims</th><th>时间</th></tr></thead>
+        <tbody id="audit-body">
+          <tr><td colspan="6" class="muted">暂无记录。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function health() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    $('health-dot').classList.toggle('off', d.status !== 'ok');
+  } catch (e) { $('health-dot').classList.add('off'); }
+}
+
+async function generate() {
+  $('btn-generate').disabled = true;
+  $('gen-status').textContent = '生成中…';
+  $('result-banner').className = 'result-banner';
+  const payload = { doc_id: $('doc-id').value.trim(), template_id: $('template-id').value.trim() };
+  const rawData = $('data-override').value.trim();
+  if (rawData) {
+    try { payload.data = JSON.parse(rawData); }
+    catch (e) { $('gen-status').textContent = '数据 JSON 解析失败: ' + e.message; $('btn-generate').disabled = false; return; }
+  }
+  try {
+    const r = await fetch('/api/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    renderResult(d);
+    $('gen-status').textContent = '完成（run_id: ' + d.run_id + '）';
+  } catch (e) {
+    $('gen-status').textContent = '请求失败: ' + e.message;
+    $('result-banner').className = 'result-banner err';
+    $('result-banner').textContent = '请求失败：' + e.message;
+  } finally {
+    $('btn-generate').disabled = false;
+    refreshClaims(); refreshAudit();
+  }
+}
+
+function renderResult(d) {
+  const banner = $('result-banner');
+  if (d.success) {
+    banner.className = 'result-banner ok';
+    banner.innerHTML = '✓ 校验通过（doc_id: ' + d.doc_id + '）'
+      + (d.docx_path ? ' <a class="download" href="/api/download/' + d.doc_id + '" download>下载 docx</a>' : '');
+  } else {
+    banner.className = 'result-banner err';
+    banner.innerHTML = '✗ 校验失败（失败层: ' + (d.failed_stage || 'security') + '）';
+  }
+  // 四层校验
+  const layers = (d.report && d.report.layers) || [];
+  const el = $('layers');
+  if (!layers.length) { el.innerHTML = '<div class="muted" style="font-size:12px;">无校验报告（安全拦截已阻断交付）。</div>'; return; }
+  el.innerHTML = layers.map(l => {
+    const checks = (l.checks || []).map(c => '<div class="' + (c.passed ? 'ok' : 'issue') + '">· ' + c.name + (c.passed ? '' : ' — ' + (c.detail || '')) + '</div>').join('');
+    return '<div class="layer"><div class="head"><span class="name">' + l.layer + '</span>'
+      + '<span class="badge ' + (l.passed ? 'pass' : 'fail') + '">' + (l.passed ? 'PASS' : 'FAIL') + '</span></div>'
+      + checks + '</div>';
+  }).join('');
+}
+
+function claimLi(c) {
+  const field = c.target_field ? ' <span class="muted">[' + c.target_field + ']</span>' : '';
+  const rule = ' <span class="mono muted">' + c.rule + '</span>';
+  return '<li><span class="ev">' + c.event_type + '</span>' + field + rule
+    + '<div class="muted">' + c.detail + '</div></li>';
+}
+
+async function refreshClaims() {
+  const r = await fetch('/api/claims'); const d = await r.json();
+  const map = {auto_block:'l-auto_block', auto_pass:'l-auto_pass', human:'l-human', sample:'l-sample'};
+  for (const [ch, id] of Object.entries(map)) {
+    const list = d[ch] || [];
+    $('c-' + ch).textContent = list.length;
+    $('l-' + ch).innerHTML = list.length ? list.map(claimLi).join('') : '<div class="empty">（空）</div>';
+  }
+}
+
+async function refreshAudit() {
+  const r = await fetch('/api/audit'); const d = await r.json();
+  const tbody = $('audit-body');
+  if (!d.runs.length) { tbody.innerHTML = '<tr><td colspan="6" class="muted">暂无记录。</td></tr>'; return; }
+  tbody.innerHTML = d.runs.map(x => {
+    const time = new Date(x.ts * 1000).toLocaleString('zh-CN');
+    return '<tr><td class="mono">' + x.run_id + '</td><td>' + x.doc_id + '</td>'
+      + '<td>' + (x.success ? '<span style="color:var(--green)">通过</span>' : '<span style="color:var(--red)">失败</span>') + '</td>'
+      + '<td>' + (x.failed_stage || '—') + '</td><td>' + x.claim_count + '</td><td>' + time + '</td></tr>';
+  }).join('');
+}
+
+$('btn-generate').addEventListener('click', generate);
+$('btn-audit').addEventListener('click', () => { refreshAudit(); refreshClaims(); });
+
+health(); refreshClaims(); refreshAudit();
+</script>
+</body>
+</html>
